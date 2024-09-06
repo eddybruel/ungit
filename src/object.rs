@@ -33,6 +33,7 @@ pub trait Object {
 pub enum Kind {
     Blob,
     Tree,
+    Commit,
 }
 
 impl Kind {
@@ -40,6 +41,7 @@ impl Kind {
         match self {
             Kind::Blob => "blob",
             Kind::Tree => "tree",
+            Kind::Commit => "commit",
         }
     }
 }
