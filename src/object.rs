@@ -32,12 +32,14 @@ pub trait Object {
 #[derive(Clone, Copy, Debug)]
 pub enum Kind {
     Blob,
+    Tree,
 }
 
 impl Kind {
     fn as_str(&self) -> &str {
         match self {
             Kind::Blob => "blob",
+            Kind::Tree => "tree",
         }
     }
 }
