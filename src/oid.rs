@@ -1,25 +1,25 @@
 use {digest::Digest, sha1::Sha1, std::fmt};
 
-#[derive(Clone, Copy, Eq, PartialEq)]
-pub enum Hash {
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Oid {
     Sha1([u8; 20]),
 }
 
-impl Hash {
+impl Oid {
     pub fn from_kind_and_bytes(kind: Kind, bytes: &[u8]) -> Self {
         match kind {
-            Kind::Sha1 => Hash::Sha1(bytes.try_into().unwrap()),
+            Kind::Sha1 => Oid::Sha1(bytes.try_into().unwrap()),
         }
     }
 
     pub fn as_bytes(&self) -> &[u8] {
         match self {
-            Hash::Sha1(bytes) => bytes,
+            Oid::Sha1(bytes) => bytes,
         }
     }
 }
 
-impl fmt::Debug for Hash {
+impl fmt::Display for Oid {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for &byte in self.as_bytes() {
             write!(f, "{:02x}", byte)?;
@@ -46,9 +46,9 @@ impl Builder {
         }
     }
 
-    pub fn finish(self) -> Hash {
+    pub fn finish(self) -> Oid {
         match self {
-            Builder::Sha1(hasher) => Hash::Sha1(hasher.finalize().try_into().unwrap()),
+            Builder::Sha1(hasher) => Oid::Sha1(hasher.finalize().try_into().unwrap()),
         }
     }
 }
