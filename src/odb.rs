@@ -1,6 +1,6 @@
 use {
+    crate::{io::HashWriter, object, oid, oid::Oid},
     anyhow::Result,
-    crate::{object, oid, oid::Oid, io::HashWriter},
     flate2::{Compression, write::ZlibEncoder},
     std::{io, io::Write, path::PathBuf},
     tempfile::NamedTempFile,
@@ -22,12 +22,12 @@ impl Odb {
     }
 
     pub fn store(&self, kind: object::Kind, content: &[u8]) -> Result<Oid> {
-        let mut writer = self.store_streaming(kind, content.len())?;
+        let mut writer = self.store_streaming(kind, content.len().try_into().unwrap())?;
         writer.write_all(content)?;
         writer.commit()
     }
 
-    pub fn store_streaming(&self, kind: object::Kind, len: usize) -> Result<Writer> {
+    pub fn store_streaming(&self, kind: object::Kind, len: u64) -> Result<Writer> {
         let tempfile = NamedTempFile::new_in(&self.path)?;
         let encoder = ZlibEncoder::new(tempfile, Compression::default());
         let inner = HashWriter::new(encoder, self.oid_kind);

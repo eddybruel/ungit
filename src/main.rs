@@ -1,3 +1,4 @@
+pub mod blob;
 pub mod index;
 pub mod io;
 pub mod lockfile;
@@ -6,15 +7,20 @@ pub mod odb;
 pub mod oid;
 pub mod reader;
 
-use anyhow::Result;
+use {anyhow::Result, odb::Odb};
 
 fn main() -> Result<()> {
-    let file = index::File::new(
+    let index_file = index::File::new(
         "/Users/ejpbruel/Projects/makepad/.git/index",
         oid::Kind::Sha1,
     );
-    let index = file.load_for_update()?;
+    let index = index_file.load_for_update()?;
     println!("{:#?}", index);
     index.commit()?;
+
+    let odb = Odb::new("/Users/ejpbruel/Projects/makepad/.git/objects", oid::Kind::Sha1);
+    let oid = blob::from_path("/Users/ejpbruel/Projects/makepad/Cargo.toml", &odb)?;
+    println!("{}", oid);
+    
     Ok(())
 }
