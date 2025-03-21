@@ -92,10 +92,6 @@ impl Index {
         }
     }
 
-    pub fn version(&self) -> Version {
-        self.version
-    }
-
     pub fn from_bytes(bytes: &[u8], oid_kind: oid::Kind) -> Result<Self> {
         let (bytes, expected_checksum) = bytes.split_at(bytes.len() - oid_kind.size());
         let expected_checksum = Oid::from_kind_and_bytes(oid_kind, expected_checksum);
@@ -123,6 +119,14 @@ impl Index {
         Ok(Self { version, entries })
     }
 
+    pub fn version(&self) -> Version {
+        self.version
+    }
+
+    pub fn entries(&self) -> &[Entry] {
+        &self.entries
+    }
+
     pub fn write_to(&self, writer: &mut impl Write, oid_kind: oid::Kind) -> Result<()> {
         let mut writer = HashWriter::new(writer, oid_kind);
         writer.write_all(SIGNATURE)?;
@@ -134,14 +138,6 @@ impl Index {
         let (writer, hash) = writer.finish();
         writer.write_all(hash.as_bytes())?;
         Ok(())
-    }
-}
-
-impl Deref for Index {
-    type Target = [Entry];
-
-    fn deref(&self) -> &Self::Target {
-        &self.entries
     }
 }
 

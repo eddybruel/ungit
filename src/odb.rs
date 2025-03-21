@@ -1,5 +1,5 @@
 use {
-    crate::{io::HashWriter, object, oid, oid::Oid},
+    crate::{io::HashWriter, object, object::Object, oid, oid::Oid},
     anyhow::Result,
     flate2::{Compression, write::ZlibEncoder},
     std::{io, io::Write, path::PathBuf},
@@ -21,18 +21,18 @@ impl Odb {
         Self { path, oid_kind }
     }
 
-    pub fn store(&self, kind: object::Kind, content: &[u8]) -> Result<Oid> {
-        let mut writer = self.store_streaming(kind, content.len().try_into().unwrap())?;
-        writer.write_all(content)?;
-        writer.commit()
+    pub fn store(&self, object: Object<'_>) -> Result<Oid> {
+        let mut writer = self.create_writer(object.header())?;
+        writer.write_all(&object.content)?;
+        writer.finish()
     }
 
-    pub fn store_streaming(&self, kind: object::Kind, len: u64) -> Result<Writer> {
+    pub fn create_writer(&self, header: object::Header) -> Result<Writer> {
         let tempfile = NamedTempFile::new_in(&self.path)?;
         let encoder = ZlibEncoder::new(tempfile, Compression::default());
         let inner = HashWriter::new(encoder, self.oid_kind);
         let mut writer = Writer { inner };
-        write!(writer, "{} {}\0", kind, len)?;
+        write!(writer, "{}", header)?;
         Ok(writer)
     }
 }
@@ -43,7 +43,7 @@ pub struct Writer {
 }
 
 impl Writer {
-    pub fn commit(self) -> Result<Oid> {
+    pub fn finish(self) -> Result<Oid> {
         let (encoder, oid) = self.inner.finish();
         let tempfile = encoder.finish()?;
         let mut path = tempfile.path().parent().unwrap().to_path_buf();

@@ -8,7 +8,10 @@ pub fn from_path(path: impl AsRef<Path>, odb: &Odb) -> Result<Oid> {
     let file = File::open(path)?;
     let len = file.metadata()?.len();
     let mut reader = BufReader::new(file);
-    let mut writer = odb.store_streaming(object::Kind::Blob, len)?;
+    let mut writer = odb.create_writer(object::Header {
+        kind: object::Kind::Blob,
+        len,
+    })?;
     io::copy(&mut reader, &mut writer)?;
-    writer.commit()
+    writer.finish()
 }
