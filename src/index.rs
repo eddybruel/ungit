@@ -85,13 +85,6 @@ pub struct Index {
 }
 
 impl Index {
-    pub fn new() -> Self {
-        Self {
-            version: Version::V2,
-            entries: Vec::new(),
-        }
-    }
-
     pub fn from_bytes(bytes: &[u8], oid_kind: oid::Kind) -> Result<Self> {
         let (bytes, expected_checksum) = bytes.split_at(bytes.len() - oid_kind.size());
         let expected_checksum = Oid::from_kind_and_bytes(oid_kind, expected_checksum);
@@ -135,8 +128,8 @@ impl Index {
         for entry in &self.entries {
             entry.write_to(&mut writer)?;
         }
-        let (writer, hash) = writer.finish();
-        writer.write_all(hash.as_bytes())?;
+        let (writer, checksum) = writer.finish();
+        writer.write_all(checksum.as_bytes())?;
         Ok(())
     }
 }

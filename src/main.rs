@@ -1,4 +1,5 @@
 pub mod blob;
+pub mod commit;
 pub mod index;
 pub mod io;
 pub mod lockfile;
@@ -8,7 +9,7 @@ pub mod oid;
 pub mod reader;
 pub mod tree;
 
-use {anyhow::Result, odb::Odb};
+use {anyhow::Result, commit::Timestamp, odb::Odb};
 
 fn main() -> Result<()> {
     let odb = Odb::new(
@@ -20,7 +21,23 @@ fn main() -> Result<()> {
         oid::Kind::Sha1,
     );
     let index = index_file.load()?;
-    let oid = tree::from_index(&index, &odb)?;
+    let tree = tree::from_index(&index, &odb)?;
+    let oid = commit::create(
+        tree,
+        &[],
+        commit::Signature {
+            name: b"Eddy Bruel".into(),
+            email: b"me@eddybruel".into(),
+            timestamp: Timestamp::now(),
+        },
+        commit::Signature {
+            name: b"Eddy Bruel".into(),
+            email: b"me@eddybruel".into(),
+            timestamp: Timestamp::now(),
+        },
+        b"Initial commit".into(),
+        &odb,
+    )?;
     println!("{}", oid);
     Ok(())
 }

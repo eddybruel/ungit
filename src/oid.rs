@@ -6,6 +6,12 @@ pub enum Oid {
 }
 
 impl Oid {
+    pub fn new(kind: Kind) -> Self {
+        match kind {
+            Kind::Sha1 => Oid::Sha1([0; 20]),
+        }
+    }
+
     pub fn from_kind_and_bytes(kind: Kind, bytes: &[u8]) -> Self {
         match kind {
             Kind::Sha1 => Oid::Sha1(bytes.try_into().unwrap()),
