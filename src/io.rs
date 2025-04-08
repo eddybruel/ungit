@@ -1,5 +1,5 @@
 use {
-    crate::{oid, oid::Oid},
+    crate::{hash, hash::Hash},
     std::{io, io::Write},
 };
 
@@ -60,18 +60,18 @@ where
 #[derive(Debug)]
 pub struct HashWriter<W> {
     inner: W,
-    hash: oid::Builder,
+    hash: hash::Builder,
 }
 
 impl<W> HashWriter<W> {
-    pub fn new(inner: W, hash_kind: oid::Kind) -> Self {
+    pub fn new(inner: W, hash_kind: hash::Kind) -> Self {
         Self {
             inner,
-            hash: oid::Builder::new(hash_kind),
+            hash: hash::Builder::new(hash_kind),
         }
     }
 
-    pub fn finish(self) -> (W, Oid) {
+    pub fn finish(self) -> (W, Hash) {
         (self.inner, self.hash.finish())
     }
 }

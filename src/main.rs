@@ -1,28 +1,31 @@
 pub mod blob;
 pub mod commit;
+pub mod hash;
 pub mod index;
+pub mod index_file;
 pub mod io;
-pub mod lockfile;
+pub mod lock_file;
 pub mod object;
-pub mod odb;
-pub mod oid;
+pub mod object_store;
 pub mod reader;
+pub mod ref_;
+pub mod ref_store;
 pub mod tree;
 
-use {anyhow::Result, commit::Timestamp, odb::Odb};
+use {anyhow::Result, commit::Timestamp, index_file::IndexFile, object_store::ObjectStore};
 
 fn main() -> Result<()> {
-    let odb = Odb::new(
+    let object_store = ObjectStore::new(
         "/Users/ejpbruel/Projects/makepad/.git/objects",
-        oid::Kind::Sha1,
+        hash::Kind::Sha1,
     );
-    let index_file = index::File::new(
+    let index_file = IndexFile::new(
         "/Users/ejpbruel/Projects/makepad/.git/index",
-        oid::Kind::Sha1,
+        hash::Kind::Sha1,
     );
-    let index = index_file.load()?;
-    let tree = tree::from_index(&index, &odb)?;
-    let oid = commit::create(
+    let index = index_file.read()?;
+    let tree = tree::from_index(&index, &object_store)?;
+    let commit_id = commit::create(
         tree,
         &[],
         commit::Signature {
@@ -36,8 +39,8 @@ fn main() -> Result<()> {
             timestamp: Timestamp::now(),
         },
         b"Initial commit".into(),
-        &odb,
+        &object_store,
     )?;
-    println!("{}", oid);
+    println!("oid: {}", commit_id);
     Ok(())
 }

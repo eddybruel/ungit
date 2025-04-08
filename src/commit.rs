@@ -1,9 +1,9 @@
 use {
-    crate::{object, object::Object, odb::Odb, oid::Oid},
+    crate::{hash::Hash, object, object::Object, object_store::ObjectStore},
     anyhow::Result,
     bstr::BStr,
     jiff::Zoned,
-    std::{fmt, io::Write},
+    std::io::Write,
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -13,9 +13,13 @@ pub struct Signature<'a> {
     pub timestamp: Timestamp,
 }
 
-impl fmt::Display for Signature<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} <{}> {}", self.name, self.email, self.timestamp)
+impl<'a> Signature<'a> {
+    fn write_to(&self, writer: &mut impl Write) -> Result<()> {
+        writer.write_all(self.name)?;
+        writer.write_all(b" <")?;
+        writer.write_all(self.email)?;
+        writer.write_all(b"> ")?;
+        self.timestamp.write_to(writer)
     }
 }
 
@@ -40,17 +44,22 @@ impl Timestamp {
             offset: offset.seconds().unsigned_abs(),
         }
     }
-}
 
-impl fmt::Display for Timestamp {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    pub fn write_to(&self, writer: &mut impl Write) -> Result<()> {
         const SECS_PER_MIN: u32 = 60;
         const MINS_PER_HOUR: u32 = 60;
         const SECS_PER_HOUR: u32 = SECS_PER_MIN * MINS_PER_HOUR;
 
+        let mut buffer = itoa::Buffer::new();
         let hours = self.offset / SECS_PER_HOUR;
         let mins = (self.offset % SECS_PER_HOUR) / SECS_PER_MIN;
-        write!(f, "{} {}{:02}{:02}", self.time, self.sign, hours, mins)
+        writer.write_all(buffer.format(self.time).as_bytes())?;
+        writer.write_all(b" ")?;
+        writer.write_all(self.sign.as_bytes())?;
+        writer.write_all(buffer.format(hours).as_bytes())?;
+        writer.write_all(b":")?;
+        writer.write_all(buffer.format(mins).as_bytes())?;
+        Ok(())
     }
 }
 
@@ -61,38 +70,39 @@ pub enum Sign {
 }
 
 impl Sign {
-    fn as_str(self) -> &'static str {
+    fn as_bytes(self) -> &'static [u8] {
         match self {
-            Sign::Plus => "+",
-            Sign::Minus => "-",
+            Sign::Plus => b"+",
+            Sign::Minus => b"-",
         }
     }
 }
 
-impl fmt::Display for Sign {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.as_str())
-    }
-}
-
 pub fn create(
-    tree: Oid,
-    parents: &[Oid],
+    tree: Hash,
+    parents: &[Hash],
     author: Signature<'_>,
     committer: Signature<'_>,
     message: &BStr,
-    odb: &Odb,
-) -> Result<Oid> {
+    store: &ObjectStore,
+) -> Result<Hash> {
     let mut content = Vec::new();
-    writeln!(&mut content, "tree {}", tree)?;
+    content.write_all(b"tree ")?;
+    tree.write_hex_to(&mut content)?;
+    content.write_all(b"\n")?;
     for parent in parents {
-        writeln!(&mut content, "parent {}", parent)?;
+        content.write_all(b"parent ")?;
+        parent.write_hex_to(&mut content)?;
+        content.write_all(b"\n")?;
     }
-    writeln!(&mut content, "author {}", author)?;
-    writeln!(&mut content, "committer {}", committer)?;
-    writeln!(&mut content, "")?;
+    content.write_all(b"author ")?;
+    author.write_to(&mut content)?;
+    content.write_all(b"\n")?;
+    content.write_all(b"committer ")?;
+    committer.write_to(&mut content)?;
+    content.write_all(b"\n\n")?;
     content.write_all(message)?;
-    odb.store(Object {
+    store.write(Object {
         kind: object::Kind::Commit,
         content: &content,
     })
