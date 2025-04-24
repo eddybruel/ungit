@@ -1,18 +1,17 @@
 use {
-    crate::{
-        hash,
-        lock_file::LockFile,
-        ref_::Ref,
+    crate::{hash, hash::Hash, ref_::Ref},
+    anyhow::{Result, anyhow},
+    bstr::BString,
+    std::{
+        collections::{HashMap, hash_map},
+        path::PathBuf,
+        sync::Arc,
     },
-    anyhow::Result,
-    bstr::{BStr, BString},
-    std::{collections::HashMap, ffi::OsStr, fs, os::unix::ffi::OsStrExt, path::PathBuf},
 };
 
 #[derive(Debug)]
 pub struct RefStore {
-    path: PathBuf,
-    hash_kind: hash::Kind,
+    inner: Arc<RefStoreInner>,
 }
 
 impl RefStore {
@@ -22,99 +21,84 @@ impl RefStore {
 
     fn _new(path: PathBuf, hash_kind: hash::Kind) -> Self {
         Self {
-            path,
-            hash_kind,
+            inner: Arc::new(RefStoreInner { path, hash_kind }),
         }
     }
 
-    pub fn create_transaction(&self) -> Transaction {
+    pub fn start_transaction(&self) -> Transaction {
         Transaction {
-            path: self.path.clone(),
-            hash_kind: self.hash_kind,
-            ops: Vec::new(),
+            ref_store_inner: self.inner.clone(),
+            ops: HashMap::new(),
         }
+    }
+}
+
+#[derive(Debug)]
+struct RefStoreInner {
+    path: PathBuf,
+    hash_kind: hash::Kind,
+}
+
+impl RefStoreInner {
+    fn hash_kind(&self) -> hash::Kind {
+        self.hash_kind
     }
 }
 
 #[derive(Debug)]
 pub struct Transaction {
-    path: PathBuf,
-    hash_kind: hash::Kind,
-    ops: Vec<Op>,
+    ref_store_inner: Arc<RefStoreInner>,
+    ops: HashMap<BString, Op>,
 }
 
 impl Transaction {
-    pub fn create(&mut self, name: BString, new: Ref) {
-        self.ops.push(Op::Create { name, new });
+    pub fn update(&mut self, name: BString, old: Option<Ref>, new: Ref) -> Result<()> {
+        self.op(name, old, Some(new))
     }
 
-    pub fn update(&mut self, name: BString, old: Ref, new: Ref) {
-        self.ops.push(Op::Update { name, old, new });
-    }
-
-    pub fn delete(&mut self, name: BString, old: Ref) {
-        self.ops.push(Op::Delete { name, old });
-    }
-
-    pub fn commit(self) -> Result<()> {
-        let mut refs = HashMap::new();
-        for op in &self.ops {
-            let name = op.name();
-            let path = self.path.join(OsStr::from_bytes(name));
-            let mut lock_file = LockFile::acquire(&path)?;
-            if let Some(old) = op.old() {
-                let data = fs::read(path)?;
-                let ref_ = Ref::from_bytes(&data, self.hash_kind)?;
-                if &ref_ != old {
-                    return Err(anyhow::anyhow!("reference {} has been modified", name));
-                }
-            } else if path.exists() {
-                return Err(anyhow::anyhow!("reference {} already exists", name));
-            }
-            if let Some(new) = op.new() {
-                new.write_to(&mut lock_file)?;
-            };
-            refs.insert(name, lock_file.close());
+    pub fn create(&mut self, name: BString, new: Ref) -> Result<()> {
+        if new.object_id().map_or(false, Hash::is_null) {
+            return Err(anyhow!("create called with new object id set to null"));
         }
-        for op in &self.ops {
-            let lock_file = refs.remove(op.name()).unwrap();
-            if op.new().is_some() {
-                lock_file.commit()?;
-            } else {
-                fs::remove_file(lock_file.resource_path())?;
+        self.op(
+            name,
+            Some(Ref::ObjectId(Hash::null(self.ref_store_inner.hash_kind()))),
+            Some(new),
+        )
+    }
+
+    pub fn delete(&mut self, name: BString, old: Option<Ref>) -> Result<()> {
+        if old
+            .as_ref()
+            .and_then(|old| old.object_id())
+            .map_or(false, Hash::is_null)
+        {
+            return Err(anyhow!("delete called with old object id set to null"));
+        }
+        self.op(
+            name,
+            old,
+            Some(Ref::ObjectId(Hash::null(self.ref_store_inner.hash_kind()))),
+        )
+    }
+
+    pub fn verify(&mut self, name: BString, old: Option<Ref>) -> Result<()> {
+        self.op(name, old, None)
+    }
+
+    fn op(&mut self, name: BString, old: Option<Ref>, new: Option<Ref>) -> Result<()> {
+        match self.ops.entry(name) {
+            hash_map::Entry::Occupied(_) => Err(anyhow!("")),
+            hash_map::Entry::Vacant(entry) => {
+                entry.insert(Op { old, new });
+                Ok(())
             }
         }
-        Ok(())
     }
 }
 
-#[derive(Debug)]
-enum Op {
-    Create { name: BString, new: Ref },
-    Update { name: BString, old: Ref, new: Ref },
-    Delete { name: BString, old: Ref },
-}
-
-impl Op {
-    fn name(&self) -> &BStr {
-        match self {
-            Op::Create { name, .. } | Op::Update { name, .. } | Op::Delete { name, .. } => {
-                name.as_ref()
-            }
-        }
-    }
-
-    fn old(&self) -> Option<&Ref> {
-        match self {
-            Op::Update { old, .. } | Op::Delete { old, .. } => Some(old),
-            _ => None,
-        }
-    }
-
-    fn new(&self) -> Option<&Ref> {
-        match self {
-            Op::Create { new, .. } | Op::Update { new, .. } => Some(new),
-            _ => None,
-        }
-    }
+#[derive(Clone, Debug)]
+struct Op {
+    old: Option<Ref>,
+    new: Option<Ref>,
 }

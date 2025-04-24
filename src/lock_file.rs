@@ -1,6 +1,10 @@
 use {
     anyhow::Result,
-    std::{io, io::Write, path::{Path, PathBuf}},
+    std::{
+        io,
+        io::Write,
+        path::{Path, PathBuf},
+    },
     tempfile::{NamedTempFile, TempPath},
 };
 

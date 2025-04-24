@@ -3,7 +3,7 @@ use {
     anyhow::Result,
     digest::Digest,
     sha1::Sha1,
-    std::{fmt, io::Write, str},
+    std::{fmt, io::Write, ops::Deref, str},
 };
 
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -12,13 +12,14 @@ pub enum Hash {
 }
 
 impl Hash {
-    pub fn new(kind: Kind) -> Self {
+    pub fn null(kind: Kind) -> Self {
         match kind {
             Kind::Sha1 => Hash::Sha1([0; 20]),
         }
     }
 
     pub fn from_bytes(bytes: &[u8], kind: Kind) -> Self {
+        assert_eq!(bytes.len(), kind.len());
         match kind {
             Kind::Sha1 => Hash::Sha1(bytes.try_into().unwrap()),
         }
@@ -43,6 +44,10 @@ impl Hash {
             reader.read_bytes(kind.hex_len())?,
             kind,
         )?)
+    }
+
+    pub fn is_null(&self) -> bool {
+        self.as_bytes().iter().all(|&byte| byte == 0)
     }
 
     pub fn kind(&self) -> Kind {
@@ -86,6 +91,31 @@ impl fmt::Display for Hash {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut buffer = [0; Kind::LONGEST.hex_len()];
         f.write_str(self.to_hex_str(&mut buffer))
+    }
+}
+
+#[derive(Debug)]
+pub struct NonNullHash(Hash);
+
+impl NonNullHash {
+    pub fn new(hash: Hash) -> Option<Self> {
+        if hash.is_null() {
+            None
+        } else {
+            Some(Self(hash))
+        }
+    }
+
+    pub fn as_hash(&self) -> &Hash {
+        &self.0
+    }
+}
+
+impl Deref for NonNullHash {
+    type Target = Hash;
+
+    fn deref(&self) -> &Self::Target {
+        self.as_hash()
     }
 }
 

@@ -26,6 +26,22 @@ impl Ref {
         }
     }
 
+    pub fn object_id(&self) -> Option<&Hash> {
+        if let Self::ObjectId(object_id) = self {
+            Some(object_id)
+        } else {
+            None
+        }
+    }
+
+    pub fn ref_name(&self) -> Option<&BString> {
+        if let Self::RefName(ref_name) = self {
+            Some(ref_name)
+        } else {
+            None
+        }
+    }
+
     pub fn write_to(&self, writer: &mut impl Write) -> Result<()> {
         match self {
             Ref::ObjectId(object_id) => object_id.write_hex_to(writer),
